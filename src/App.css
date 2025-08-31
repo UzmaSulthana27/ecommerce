@@ -1,0 +1,28 @@
+#h1{
+  font-size: 20px;
+  font-weight: 1px;
+  margin-left: 100px;
+  font-family: 'Times New Roman', Times, serif;
+}
+#btn1, #btn2 {
+  background-color: #7b81fb;;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  text-align: center; 
+  font-size: 16px;
+  /* margin: 4px 2px; */
+  margin-left: 100px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+#btn1:hover, #btn2:hover {
+  background-color: #010df5;
+  color: white;
+}
+#h5 {
+  font-size: 20px;
+  font-weight: 1px;
+  right: 100px;
+  font-family: 'Times New Roman', Times, serif;
+}
