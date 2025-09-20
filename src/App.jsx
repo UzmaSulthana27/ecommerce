@@ -1,10 +1,14 @@
 import React from 'react';
-import { ProductProvider } from './Context/ProductContext';  // ✅ updated path
+import { ProductProvider } from './Context/ProductContext';  
 import ProductsList from './component/ProductsList';
 import Cart from './component/Cart';
-import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import Home from './component/Home';
 import Login from './component/Login';
+import MyOrders from './component/MyOrders';  
+import Payment from "./component/Payment";  
+import OrderSuccess from "./component/OrderSuccess";    
+
+import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 
 let router = createBrowserRouter([
   {
@@ -12,30 +16,37 @@ let router = createBrowserRouter([
     element: <Home />
   },
   {
-    path: '/Cart',
+    path: '/cart',
     element: <Cart />
   },
   {
-    path: '/Login',
+    path: '/login',
     element: <Login />
   },
   {
-    path: '/Products',
+    path: '/products',
     element: <ProductsList />
+  },
+  {
+    path: '/orders',  
+    element: <MyOrders />
+  },
+  {
+    path: '/payment',  
+    element: <Payment />
+  },
+  {
+    path:'/ordersuccess',
+    element:<OrderSuccess/>
   }
 ]);
 
 const App = () => {
   return (
-    <>
-    
     <ProductProvider>
-      <RouterProvider router={router}></RouterProvider>
+      <RouterProvider router={router} />
     </ProductProvider>
-   </>
   );
 };
 
 export default App;
-
-
