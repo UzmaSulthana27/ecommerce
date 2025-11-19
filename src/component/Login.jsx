@@ -1,56 +1,78 @@
 import React, { useState, useEffect, useContext } from "react";
 import { useNavigate } from "react-router-dom";
-import api from "../utils/api"; // axios instance (see snippet below)
+import api from "../utils/api"; // axios instance (baseURL + withCredentials)
 import Navbar from "./Navbar";
 import { AuthContext } from "../Context/AuthContext";
 
 const Login = () => {
-  const [login, setLogin] = useState({ un: "", pass: "" });
-  const [signup, setSignup] = useState({ un: "", email: "", pass: "", confirmPass: "" });
+  // renamed local login state to avoid name collision with context.login
+  const [creds, setCreds] = useState({ un: "", pass: "" });
+  const [signupData, setSignupData] = useState({ un: "", email: "", pass: "", confirmPass: "" });
   const [error, setError] = useState("");
   const [fadeIn, setFadeIn] = useState(false);
   const [isSignup, setIsSignup] = useState(false);
+  const [loading, setLoading] = useState(false);
+
   const navigate = useNavigate();
-  const { login: setAuth } = useContext(AuthContext); // login(token, userData)
+  const auth = useContext(AuthContext);
+
+  // Safety: if AuthContext not provided, show a friendly message instead of crashing
+  if (!auth) {
+    return (
+      <>
+        <Navbar />
+        <div style={{ padding: 40, textAlign: "center" }}>
+          <h2>Authentication not initialized</h2>
+          <p>
+            Auth provider is missing. Make sure <code>AuthProvider</code> wraps your app.
+          </p>
+        </div>
+      </>
+    );
+  }
+
+  // auth.login is the function from context (login(accessToken, userObj))
+  const { login: loginContext } = auth;
 
   useEffect(() => {
-    setTimeout(() => setFadeIn(true), 100);
+    const t = setTimeout(() => setFadeIn(true), 100);
+    return () => clearTimeout(t);
   }, []);
 
-  // Validation
+  // Validation functions
   const validateLogin = () => {
-    if (!login.un || !login.pass) return "Please enter both username and password.";
-    if (login.un.length < 3) return "Username must be at least 3 characters.";
-    if (login.pass.length < 6) return "Password must be at least 6 characters.";
-    if (!/\d/.test(login.pass)) return "Password must contain at least one number.";
+    if (!creds.un || !creds.pass) return "Please enter both username and password.";
+    if (creds.un.length < 3) return "Username must be at least 3 characters.";
+    if (creds.pass.length < 6) return "Password must be at least 6 characters.";
+    if (!/\d/.test(creds.pass)) return "Password must contain at least one number.";
     return "";
   };
 
   const validateSignup = () => {
-    if (!signup.un || !signup.email || !signup.pass || !signup.confirmPass)
+    if (!signupData.un || !signupData.email || !signupData.pass || !signupData.confirmPass)
       return "All fields are required.";
-    if (signup.un.length < 3) return "Username must be at least 3 characters.";
-    if (!/\S+@\S+\.\S+/.test(signup.email)) return "Enter a valid email.";
-    if (signup.pass.length < 6) return "Password must be at least 6 characters.";
-    if (!/\d/.test(signup.pass)) return "Password must contain at least one number.";
-    if (signup.pass !== signup.confirmPass) return "Passwords do not match.";
+    if (signupData.un.length < 3) return "Username must be at least 3 characters.";
+    if (!/\S+@\S+\.\S+/.test(signupData.email)) return "Enter a valid email.";
+    if (signupData.pass.length < 6) return "Password must be at least 6 characters.";
+    if (!/\d/.test(signupData.pass)) return "Password must contain at least one number.";
+    if (signupData.pass !== signupData.confirmPass) return "Passwords do not match.";
     return "";
   };
 
-  // Input Handlers
+  // Handlers
   const handleLoginChange = (e) => {
     const { name, value } = e.target;
-    setLogin((p) => ({ ...p, [name]: value }));
+    setCreds((p) => ({ ...p, [name]: value }));
     setError("");
   };
 
   const handleSignupChange = (e) => {
     const { name, value } = e.target;
-    setSignup((p) => ({ ...p, [name]: value }));
+    setSignupData((p) => ({ ...p, [name]: value }));
     setError("");
   };
 
-  // Form Submit - LOGIN
+  // Submit - Login
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
     const validationError = validateLogin();
@@ -59,41 +81,41 @@ const Login = () => {
       return;
     }
 
+    setLoading(true);
+    setError("");
+
     try {
-      // Call backend login endpoint
-      // server should return { accessToken, user } and optionally set HttpOnly refresh cookie
       const resp = await api.post("/auth/login", {
-        username: login.un,
-        password: login.pass,
+        username: creds.un,
+        password: creds.pass,
       });
 
       const { accessToken, user } = resp.data;
-
       if (!accessToken) {
         setError("Login failed: no token received from server.");
+        setLoading(false);
         return;
       }
 
-      // save token & user to context
-      setAuth(accessToken, user);
+      // save token & user using AuthContext
+      loginContext(accessToken, user);
 
-      // clear local form state and redirect
-      setLogin({ un: "", pass: "" });
-      navigate("/products"); // lowercase based on your routes
+      // clear local form and redirect
+      setCreds({ un: "", pass: "" });
+      navigate("/products");
     } catch (err) {
-      // show friendly error
-      if (err.response && err.response.data && err.response.data.msg) {
-        setError(err.response.data.msg);
-      } else if (err.response && err.response.status === 401) {
-        setError("Invalid username or password.");
+      console.error("Login error:", err);
+      if (err.response && err.response.data) {
+        setError(err.response.data.msg || err.response.data.message || "Login failed.");
       } else {
         setError("Network or server error. Please try again.");
       }
-      console.error("Login error:", err);
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Form Submit - SIGNUP
+  // Submit - Signup
   const handleSignupSubmit = async (e) => {
     e.preventDefault();
     const validationError = validateSignup();
@@ -102,26 +124,28 @@ const Login = () => {
       return;
     }
 
+    setLoading(true);
+    setError("");
+
     try {
-      // Call backend register endpoint
-      // server might return created user or a success message
       await api.post("/auth/register", {
-        username: signup.un,
-        email: signup.email,
-        password: signup.pass,
+        username: signupData.un,
+        email: signupData.email,
+        password: signupData.pass,
       });
 
-      // success flow
       alert("Signup successful! Please login with your new credentials.");
-      setSignup({ un: "", email: "", pass: "", confirmPass: "" });
+      setSignupData({ un: "", email: "", pass: "", confirmPass: "" });
       setIsSignup(false);
     } catch (err) {
-      if (err.response && err.response.data && err.response.data.msg) {
-        setError(err.response.data.msg);
-      } else {
-        setError("Signup failed. Please try again.");
-      }
       console.error("Signup error:", err);
+      if (err.response && err.response.data) {
+        setError(err.response.data.msg || err.response.data.message || "Signup failed.");
+      } else {
+        setError("Network error. Please try again.");
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -129,7 +153,7 @@ const Login = () => {
     <>
       <Navbar />
       <div style={{ display: "flex", height: "100vh", fontFamily: "Arial, sans-serif" }}>
-        {/* Left Section */}
+        {/* Left */}
         <div
           style={{
             flex: 1,
@@ -165,7 +189,7 @@ const Login = () => {
           />
         </div>
 
-        {/* Right Section */}
+        {/* Right: Form */}
         <div style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center", background: "#f9f9f9" }}>
           <form
             onSubmit={isSignup ? handleSignupSubmit : handleLoginSubmit}
@@ -190,7 +214,7 @@ const Login = () => {
             <input
               type="text"
               name="un"
-              value={isSignup ? signup.un : login.un}
+              value={isSignup ? signupData.un : creds.un}
               onChange={isSignup ? handleSignupChange : handleLoginChange}
               style={{
                 width: "100%",
@@ -203,16 +227,17 @@ const Login = () => {
               }}
               onFocus={(e) => (e.target.style.border = "1px solid #007bff")}
               onBlur={(e) => (e.target.style.border = "1px solid #ddd")}
+              disabled={loading}
             />
 
-            {/* Email only for signup */}
+            {/* Email (signup) */}
             {isSignup && (
               <>
                 <label style={{ fontWeight: "bold", marginBottom: "0.5rem" }}>Email</label>
                 <input
                   type="email"
                   name="email"
-                  value={signup.email}
+                  value={signupData.email}
                   onChange={handleSignupChange}
                   style={{
                     width: "100%",
@@ -225,6 +250,7 @@ const Login = () => {
                   }}
                   onFocus={(e) => (e.target.style.border = "1px solid #007bff")}
                   onBlur={(e) => (e.target.style.border = "1px solid #ddd")}
+                  disabled={loading}
                 />
               </>
             )}
@@ -234,7 +260,7 @@ const Login = () => {
             <input
               type="password"
               name="pass"
-              value={isSignup ? signup.pass : login.pass}
+              value={isSignup ? signupData.pass : creds.pass}
               onChange={isSignup ? handleSignupChange : handleLoginChange}
               style={{
                 width: "100%",
@@ -247,16 +273,17 @@ const Login = () => {
               }}
               onFocus={(e) => (e.target.style.border = "1px solid #007bff")}
               onBlur={(e) => (e.target.style.border = "1px solid #ddd")}
+              disabled={loading}
             />
 
-            {/* Confirm Password only for signup */}
+            {/* Confirm (signup) */}
             {isSignup && (
               <>
                 <label style={{ fontWeight: "bold", marginBottom: "0.5rem" }}>Confirm Password</label>
                 <input
                   type="password"
                   name="confirmPass"
-                  value={signup.confirmPass}
+                  value={signupData.confirmPass}
                   onChange={handleSignupChange}
                   style={{
                     width: "100%",
@@ -269,6 +296,7 @@ const Login = () => {
                   }}
                   onFocus={(e) => (e.target.style.border = "1px solid #007bff")}
                   onBlur={(e) => (e.target.style.border = "1px solid #ddd")}
+                  disabled={loading}
                 />
               </>
             )}
@@ -276,49 +304,34 @@ const Login = () => {
             {/* Error */}
             {error && <p style={{ color: "red", textAlign: "center", margin: "0.5rem 0" }}>{error}</p>}
 
-            {/* Submit Button */}
+            {/* Submit */}
             <button
               type="submit"
+              disabled={loading}
               style={{
                 width: "100%",
                 padding: "0.9rem",
-                background: "#007bff",
+                background: loading ? "#6ea0ff" : "#007bff",
                 color: "#fff",
                 border: "none",
                 borderRadius: "6px",
                 fontSize: "1.1rem",
-                cursor: "pointer",
+                cursor: loading ? "not-allowed" : "pointer",
                 fontWeight: "bold",
                 marginTop: "0.5rem",
                 transition: "all 0.3s ease",
               }}
-              onMouseOver={(e) => {
-                e.target.style.background = "#0056b3";
-                e.target.style.transform = "scale(1.05)";
-              }}
-              onMouseOut={(e) => {
-                e.target.style.background = "#007bff";
-                e.target.style.transform = "scale(1)";
-              }}
             >
-              {isSignup ? "Signup" : "Login"}
+              {loading ? (isSignup ? "Signing up..." : "Logging in...") : isSignup ? "Signup" : "Login"}
             </button>
 
             {/* Toggle */}
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: "1rem", fontSize: "0.9rem" }}>
               {!isSignup && (
-                <span
-                  style={{ color: "#007bff", cursor: "pointer", transition: "all 0.3s ease" }}
-                  onMouseOver={(e) => (e.target.style.textDecoration = "underline")}
-                  onMouseOut={(e) => (e.target.style.textDecoration = "none")}
-                >
-                  Forgot Password?
-                </span>
+                <span style={{ color: "#007bff", cursor: "pointer" }}>Forgot Password?</span>
               )}
               <span
-                style={{ color: isSignup ? "#007bff" : "#28a745", cursor: "pointer", transition: "all 0.3s ease" }}
-                onMouseOver={(e) => (e.target.style.textDecoration = "underline")}
-                onMouseOut={(e) => (e.target.style.textDecoration = "none")}
+                style={{ color: isSignup ? "#007bff" : "#28a745", cursor: "pointer" }}
                 onClick={() => {
                   setIsSignup(!isSignup);
                   setError("");

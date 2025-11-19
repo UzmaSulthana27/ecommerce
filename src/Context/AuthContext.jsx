@@ -1,50 +1,44 @@
+// src/Context/AuthContext.jsx
 import React, { createContext, useState, useEffect } from "react";
-import api from "../utils/api"; // axios instance (see next)
-import { useNavigate } from "react-router-dom";
+import api from "../utils/api";
 
-export const AuthContext = createContext();
+export const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
-  const navigate = useNavigate();
-  // load from localStorage if present (dev). For better security store access token in memory.
-  const [accessToken, setAccessToken] = useState(() => localStorage.getItem("accessToken"));
+  const [accessToken, setAccessToken] = useState(
+    () => localStorage.getItem("accessToken") || null
+  );
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
 
-  // set axios header when token changes
+  // Keep axios Authorization header updated
   useEffect(() => {
     if (accessToken) {
-      localStorage.setItem("accessToken", accessToken); // dev only
       api.defaults.headers.common["Authorization"] = `Bearer ${accessToken}`;
-      // Optionally decode token to get user info or call /me endpoint
-      // setUser({ ... })
+      localStorage.setItem("accessToken", accessToken);
     } else {
       delete api.defaults.headers.common["Authorization"];
       localStorage.removeItem("accessToken");
       setUser(null);
     }
-    setLoading(false);
   }, [accessToken]);
 
-  const login = (token, userData) => {
+  const login = (token, userObj) => {
     setAccessToken(token);
-    if (userData) setUser(userData);
+    if (userObj) setUser(userObj);
   };
 
   const logout = async () => {
     try {
-      // If backend supports logout endpoint which clears refresh cookie
       await api.post("/auth/logout");
     } catch (err) {
-      // ignore
+      console.warn("Logout error:", err);
     }
     setAccessToken(null);
     setUser(null);
-    navigate("/login");
   };
 
   return (
-    <AuthContext.Provider value={{ accessToken, setAccessToken, user, setUser, login, logout, loading }}>
+    <AuthContext.Provider value={{ accessToken, user, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
