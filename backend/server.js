@@ -16,8 +16,11 @@ app.use(cookieParser());
 
 // CORS - allow frontend origin. change origin in production.
 app.use(cors({
-  origin: "http://localhost:3000", // front-end origin
-  credentials: true
+  origin: [
+      "http://localhost:5173",  // Vite frontend
+      "http://localhost:3000"   // CRA frontend (if needed)
+    ], // front-end origin
+  credentials: true,
 }));
 
 app.get("/", (req, res) => res.send("MyShop API is running"));
